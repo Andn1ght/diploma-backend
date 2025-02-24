@@ -1,31 +1,32 @@
 const WebSocket = require("ws");
 
-let wss;
+let clients = [];
 
 const setupWebSocket = (server) => {
-  wss = new WebSocket.Server({ server });
+  const wss = new WebSocket.Server({ server });
 
   wss.on("connection", (ws) => {
-    console.log("🔌 New WebSocket connection established");
-
-    ws.on("message", (message) => {
-      console.log(`📩 Received message from client: ${message}`);
-    });
+    console.log("🟢 New WebSocket connection established.");
+    clients.push(ws);
 
     ws.on("close", () => {
-      console.log("❌ WebSocket connection closed");
+      clients = clients.filter((client) => client !== ws);
+      console.log("🔴 WebSocket connection closed.");
     });
   });
 };
 
 const sendWebSocketNotification = (videoId, message) => {
-  if (wss) {
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({ videoId, message }));
-      }
-    });
-  }
+  const payload = JSON.stringify({ videoId, message });
+
+  clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+
+  console.log(`📢 WebSocket Notification Sent: ${message}`);
 };
 
+// ✅ Ensure proper export
 module.exports = { setupWebSocket, sendWebSocketNotification };

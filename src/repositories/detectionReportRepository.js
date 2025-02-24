@@ -3,7 +3,7 @@ const pool = require("../config/db");
 class DetectionReportRepository {
   static async storeDetectionReport(videoId, detectionJson) {
     const result = await pool.query(
-      "INSERT INTO detection_results (video_id, detection_json) VALUES ($1, $2) RETURNING *",
+      "INSERT INTO detection_results (video_id, detection_json, reviewed, reviewed_at) VALUES ($1, $2, FALSE, NULL) RETURNING *",
       [videoId, detectionJson]
     );
     return result.rows[0];

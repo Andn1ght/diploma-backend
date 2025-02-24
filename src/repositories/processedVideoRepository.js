@@ -3,7 +3,7 @@ const pool = require("../config/db");
 class ProcessedVideoRepository {
   static async storeProcessedVideo(videoId, processedVideo) {
     const result = await pool.query(
-      "INSERT INTO processed_videos (video_id, processed_video) VALUES ($1, $2) RETURNING *",
+      "INSERT INTO processed_videos (video_id, processed_video, processed_at) VALUES ($1, $2, NOW()) RETURNING *",
       [videoId, processedVideo]
     );
     return result.rows[0];

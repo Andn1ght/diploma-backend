@@ -1,17 +1,26 @@
-require("dotenv").config();
+const express = require("express");
 const http = require("http");
-const app = require("./src/app");
-const processVideoResults = require("./src/queue/videoConsumer");
 const { setupWebSocket } = require("./src/websockets/websocketService");
+const { processVideoResults } = require("./src/queue/videoConsumer"); // ✅ Correct import
 
-const PORT = process.env.PORT || 5000;
+const app = express();
 const server = http.createServer(app);
 
-// Initialize WebSocket
-setupWebSocket(server);
+// ✅ Ensure setupWebSocket exists before calling it
+if (typeof setupWebSocket === "function") {
+  setupWebSocket(server);
+} else {
+  console.error("❌ Error: setupWebSocket is not properly defined or exported.");
+}
 
-// Start Server
+// ✅ Ensure processVideoResults exists before calling it
+if (typeof processVideoResults === "function") {
+  processVideoResults(); // Start listening for processed videos
+} else {
+  console.error("❌ Error: processVideoResults is not properly defined or exported.");
+}
+
+const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  processVideoResults(); // Start listening for processed videos
 });
