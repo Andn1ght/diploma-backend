@@ -38,6 +38,29 @@ class VideoController {
     }
   }
 
+  static async streamProcessedVideo(req, res) {
+    try {
+      const { videoId } = req.params;
+
+      const videoBuffer = await ProcessedVideoRepository.getProcessedVideo(videoId);
+
+      if (!videoBuffer) {
+        return res.status(404).json({ error: "Processed video not found" });
+      }
+
+      // Set headers for video streaming
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Content-Length", videoBuffer.length);
+
+      // Convert buffer to readable stream and pipe it
+      const readableStream = Readable.from(videoBuffer);
+      readableStream.pipe(res);
+    } catch (error) {
+      console.error("❌ Error streaming processed video:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  }
+
   static async getAllVideos(req, res) {
     try {
       const videos = await VideoService.getAllVideos();

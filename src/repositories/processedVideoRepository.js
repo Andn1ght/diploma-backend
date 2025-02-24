@@ -10,8 +10,13 @@ class ProcessedVideoRepository {
   }
 
   static async getProcessedVideo(videoId) {
-    const result = await pool.query("SELECT * FROM processed_videos WHERE video_id = $1", [videoId]);
-    return result.rows[0];
+    const result = await pool.query("SELECT processed_video FROM processed_videos WHERE video_id = $1", [videoId]);
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return result.rows[0].processed_video; // Return only binary data
   }
 
   static async deleteProcessedVideo(videoId) {
