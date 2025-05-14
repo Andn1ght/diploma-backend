@@ -25,7 +25,7 @@ const sendWebSocketNotification = (videoId, message) => {
     }
   });
 
-  console.log(`📢 WebSocket Notification Sent: ${message}`);
+  console.log(`📢 WebSocket Notification Sent: ${payload}`);
 };
 
 // ✅ Ensure proper export

@@ -20,39 +20,50 @@ router.delete("/:id", authenticateUser, VideoController.deleteVideo);
 
 // ✅ Stream Processed Video (Fix Streaming)
 router.get("/:id/processed", authenticateUser, async (req, res) => {
-    try {
-        const processedVideo = await ProcessedVideoRepository.getProcessedVideo(req.params.id);
+  const videoId = req.params.id;
+  console.log(`📥 GET request for processed video [videoId=${videoId}]`);
 
-        if (!processedVideo) {
-            return res.status(404).json({ error: "Processed video not found" });
-        }
+  try {
+    const processedVideo = await ProcessedVideoRepository.getProcessedVideo(videoId);
 
-        // ✅ Stream video instead of sending JSON
-        res.setHeader("Content-Type", "video/mp4");
-        res.setHeader("Content-Length", processedVideo.length);
-
-        const { Readable } = require("stream");
-        const stream = Readable.from(processedVideo);
-        stream.pipe(res);
-    } catch (error) {
-        console.error("❌ Error streaming processed video:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+    if (!processedVideo) {
+      console.warn(`⚠️ Processed video not found [videoId=${videoId}]`);
+      return res.status(404).json({ error: "Processed video not found" });
     }
+
+    res.setHeader("Content-Type", "video/mp4");
+    res.setHeader("Content-Length", processedVideo.length);
+
+    const { Readable } = require("stream");
+    const stream = Readable.from(processedVideo);
+    stream.pipe(res);
+
+    console.log(`✅ Streamed processed video to client [videoId=${videoId}]`);
+  } catch (error) {
+    console.error(`❌ Error streaming processed video [videoId=${videoId}]:`, error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 // ✅ Get JSON Detection Report
 router.get("/:id/report", authenticateUser, async (req, res) => {
-    try {
-        const report = await DetectionReportRepository.getDetectionReport(req.params.id);
-        if (!report) {
-            return res.status(404).json({ error: "Report not found" });
-        }
+  const videoId = req.params.id;
+  console.log(`📥 GET request for detection report [videoId=${videoId}]`);
 
-        res.status(200).json(report);
-    } catch (error) {
-        console.error("❌ Error retrieving report:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+  try {
+    const report = await DetectionReportRepository.getDetectionReport(videoId);
+
+    if (!report) {
+      console.warn(`⚠️ Detection report not found [videoId=${videoId}]`);
+      return res.status(404).json({ error: "Report not found" });
     }
+
+    res.status(200).json(report);
+    console.log(`✅ Sent detection report to client [videoId=${videoId}]`);
+  } catch (error) {
+    console.error(`❌ Error retrieving detection report [videoId=${videoId}]:`, error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
 });
 
 module.exports = router;
