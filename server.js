@@ -1,27 +1,29 @@
 const express = require("express");
 const http = require("http");
-const app = require("./src/app"); // ✅ Import app.js
+const app = require("./src/app");
+
 const { setupWebSocket } = require("./src/websockets/websocketService");
-const { processVideoResults } = require("./src/queue/videoConsumer"); 
+const { processVideoResults } = require("./src/queue/videoConsumer");
 
-const server = http.createServer(app); // ✅ Attach app to HTTP server
+// Создаём HTTP-сервер
+const server = http.createServer(app);
 
-// ✅ Ensure WebSocket setup
+// 🔌 WebSocket сервер
 if (typeof setupWebSocket === "function") {
   setupWebSocket(server);
 } else {
-  console.error("❌ Error: setupWebSocket is not properly defined or exported.");
+  console.error("❌ [SERVER] setupWebSocket не определён или не экспортирован.");
 }
 
-// ✅ Ensure RabbitMQ Consumer is started
+// 🐇 RabbitMQ consumer (принимаем обработанные видео)
 if (typeof processVideoResults === "function") {
   processVideoResults();
 } else {
-  console.error("❌ Error: processVideoResults is not properly defined or exported.");
+  console.error("❌ [SERVER] processVideoResults не определён или не экспортирован.");
 }
 
-// Start the Server
+// 🚀 Запуск сервера
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });

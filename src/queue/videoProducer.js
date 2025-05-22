@@ -1,17 +1,27 @@
 const connectRabbitMQ = require("../config/rabbitmq");
 
+// 📤 Отправка видео на обработку в очередь RabbitMQ
 const sendVideoForProcessing = async (videoId, videoData) => {
-  const { channel } = await connectRabbitMQ();
-  const queue = "video_processing_queue";
+  try {
+    const { channel } = await connectRabbitMQ();
+    const queue = "video_processing_queue";
 
-  await channel.assertQueue(queue, { durable: true });
+    // Гарантируем, что очередь существует
+    await channel.assertQueue(queue, { durable: true });
 
-  const message = JSON.stringify({ videoId, videoData });
+    // Формируем сообщение
+    const message = JSON.stringify({ videoId, videoData });
 
-  channel.sendToQueue(queue, Buffer.from(message), { persistent: true });
-  console.log(`📤 Sent video ${videoId} for processing`);
+    // Отправка в очередь
+    channel.sendToQueue(queue, Buffer.from(message), { persistent: true });
 
-  return { message: "Video sent for processing" };
+    console.log(`[QUEUE][SEND] ✅ Видео отправлено на обработку: videoId=${videoId}`);
+
+    return { message: "Видео отправлено на обработку" };
+  } catch (error) {
+    console.error(`[QUEUE][SEND] ❌ Ошибка при отправке видео: ${error.message}`);
+    throw error;
+  }
 };
 
 module.exports = sendVideoForProcessing;

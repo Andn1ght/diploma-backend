@@ -1,14 +1,16 @@
-const VideoService = require("../services/videoService");
-const sendVideoForProcessing = require("../queue/videoProducer"); // ✅ Ensure this import exists
+const ProcessedVideoRepository = require("../repositories/processedVideoRepository");
+const VideoRepository = require("../repositories/VideoRepository")
+const sendVideoForProcessing = require("../queue/videoProducer");
 const multer = require("multer");
 
-// Configure multer for file uploads
+// Настройка multer
 const storage = multer.memoryStorage();
 const upload = multer({ 
-  storage, 
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB limit
+  storage,
+  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
   fileFilter: (req, file, cb) => {
     if (file.mimetype !== "video/mp4") {
+      console.warn("[UPLOAD] ❌ Неверный формат файла");
       return cb(new Error("Only MP4 format is allowed"), false);
     }
     cb(null, true);
@@ -18,78 +20,80 @@ const upload = multer({
 class VideoController {
   static upload = upload.single("video");
 
+  // 📥 Загрузка видео
   static async uploadVideo(req, res) {
     try {
-      if (!req.file) return res.status(400).json({ error: "No file uploaded or invalid format" });
+      if (!req.file) {
+        console.warn("[UPLOAD] ❌ Файл не передан");
+        return res.status(400).json({ error: "Нет видеофайла" });
+      }
 
       const { originalname, buffer } = req.file;
       const userId = req.user.userId;
       const storagePath = `/videos/${originalname}`;
+      const title = req.body.title || "Untitled";
+      const description = req.body.description || "";
 
-      const video = await VideoService.uploadVideo(userId, originalname, buffer, storagePath);
+      console.log(`[UPLOAD] 📥 Загружено: ${originalname} (user: ${userId})`);
 
-      // Send video to RabbitMQ for processing
+      const video = await VideoRepository.uploadVideo(userId, originalname, buffer, storagePath, title, description);
+
+      console.log(`[UPLOAD] ✅ В БД: videoId=${video.id}`);
       await sendVideoForProcessing(video.id, buffer);
+      console.log(`[QUEUE] 📤 В очередь: videoId=${video.id}`);
 
-      res.status(201).json({ message: "Video uploaded and sent for processing", video });
+      res.status(201).json({ message: "Видео загружено", video });
     } catch (error) {
-      console.error("❌ Video Upload Error:", error.message);
-      res.status(500).json({ error: "Internal Server Error" });
+      console.error("[UPLOAD] ❌ Ошибка:", error.message);
+      res.status(500).json({ error: "Ошибка сервера" });
     }
   }
 
+  // 🎞️ Стрим обработанного видео
   static async streamProcessedVideo(req, res) {
     try {
-      const { videoId } = req.params;
+      const { id: videoId } = req.params;
+      const buffer = await ProcessedVideoRepository.getProcessedVideo(videoId);
 
-      const videoBuffer = await ProcessedVideoRepository.getProcessedVideo(videoId);
-
-      if (!videoBuffer) {
-        return res.status(404).json({ error: "Processed video not found" });
+      if (!buffer) {
+        console.warn(`[STREAM] ⚠️ Видео не найдено: ${videoId}`);
+        return res.status(404).json({ error: "Видео не найдено" });
       }
 
-      // Set headers for video streaming
+      console.log(`[STREAM] ✅ Стрим: ${videoId}`);
+
       res.setHeader("Content-Type", "video/mp4");
-      res.setHeader("Content-Length", videoBuffer.length);
+      res.setHeader("Content-Length", buffer.length);
 
-      // Convert buffer to readable stream and pipe it
-      const readableStream = Readable.from(videoBuffer);
-      readableStream.pipe(res);
+      const { Readable } = require("stream");
+      Readable.from(buffer).pipe(res);
     } catch (error) {
-      console.error("❌ Error streaming processed video:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      console.error("[STREAM] ❌ Ошибка:", error.message);
+      res.status(500).json({ error: "Ошибка сервера при стриминге" });
     }
   }
 
-  static async getAllVideos(req, res) {
+  // 📥 Скачать обработанное видео
+  static async downloadProcessedVideo(req, res) {
     try {
-      const videos = await VideoService.getAllVideos();
-      res.status(200).json(videos);
-    } catch (error) {
-      console.error("❌ Error fetching videos:", error.message);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  }
+      const { id: videoId } = req.params;
+      const buffer = await ProcessedVideoRepository.getProcessedVideo(videoId);
 
-  static async getVideoById(req, res) {
-    try {
-      const video = await VideoService.getVideoById(req.params.id);
-      if (!video) return res.status(404).json({ error: "Video not found" });
+      if (!buffer) {
+        console.warn(`[DOWNLOAD] ⚠️ Видео не найдено: ${videoId}`);
+        return res.status(404).json({ error: "Видео не найдено" });
+      }
 
-      res.status(200).json(video);
-    } catch (error) {
-      console.error("❌ Error fetching video:", error.message);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  }
+      console.log(`[DOWNLOAD] 📥 Скачивание: ${videoId}`);
 
-  static async deleteVideo(req, res) {
-    try {
-      await VideoService.deleteVideo(req.params.id);
-      res.status(200).json({ message: "Video deleted successfully" });
+      res.setHeader("Content-Type", "video/mp4");
+      res.setHeader("Content-Disposition", `attachment; filename="processed_${videoId}.mp4"`);
+      res.setHeader("Content-Length", buffer.length);
+
+      res.send(buffer);
     } catch (error) {
-      console.error("❌ Error deleting video:", error.message);
-      res.status(500).json({ error: "Internal Server Error" });
+      console.error("[DOWNLOAD] ❌ Ошибка:", error.message);
+      res.status(500).json({ error: "Ошибка при скачивании видео" });
     }
   }
 }

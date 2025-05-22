@@ -11,23 +11,26 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 
 const app = express();
 
-// Middleware
-app.use(cors());
-app.use(helmet());
-app.use(compression());
-app.use(morgan("dev"));
+// 🔒 Middleware безопасности и удобства
+app.use(cors());                      // Разрешаем CORS
+app.use(helmet());                    // Защита HTTP-заголовков
+app.use(compression());              // Сжатие ответов
+app.use(morgan("dev"));              // HTTP логирование
+
+// 📦 Обработка JSON и форм
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Routes
+// 🔗 Роутинг API
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/videos", videoRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
-// Default Route
+// 🏠 Главная страница API
 app.get("/", (req, res) => {
-  res.status(200).json({ message: "Backend API is running!" });
+  console.log("[APP] ✅ API работает");
+  res.status(200).json({ message: "Backend API работает!" });
 });
 
 module.exports = app;

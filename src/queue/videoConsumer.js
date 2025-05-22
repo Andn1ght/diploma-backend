@@ -5,59 +5,57 @@ const { sendWebSocketNotification } = require("../websockets/websocketService");
 
 const OUTPUT_QUEUE = "processed_video_queue";
 
+// 🧠 Обработка сообщений из очереди RabbitMQ
 const processVideoResults = async () => {
   try {
     const { channel } = await connectRabbitMQ();
 
     await channel.assertQueue(OUTPUT_QUEUE, { durable: true });
-    console.log(`📡 Listening for messages in queue: ${OUTPUT_QUEUE}`);
+
+    console.log(`📡 [QUEUE][LISTEN] Ожидание сообщений из очереди: ${OUTPUT_QUEUE}`);
 
     channel.consume(
       OUTPUT_QUEUE,
       async (msg) => {
-        if (msg !== null) {
-          try {
-            console.log("📩 Received processed video from ML service.");
+        if (!msg) return;
 
-            // Parse received message
-            const data = JSON.parse(msg.content.toString());
-            const videoId = data.videoId;
-            const processedVideoBuffer = Buffer.from(data.processedVideo.data); // Convert to Buffer
-            const jsonReport = JSON.stringify(data.report); // Convert JSON report to string
+        try {
+          const data = JSON.parse(msg.content.toString());
+          const videoId = data.videoId;
+          const processedVideoBuffer = Buffer.from(data.processedVideo.data); // бинарное видео
+          const jsonReport = JSON.stringify(data.report); // JSON отчёт
 
-            if (!videoId || !processedVideoBuffer || !jsonReport) {
-              console.error("❌ Error: Missing required fields in message.");
-              channel.nack(msg, false, false); // Reject message, do not requeue
-              return;
-            }
-
-            console.log(`🔄 Storing processed video and JSON report for video ID: ${videoId}`);
-
-            // Store processed video in PostgreSQL
-            await ProcessedVideoRepository.storeProcessedVideo(videoId, processedVideoBuffer);
-
-            // Store detection JSON report in PostgreSQL
-            await DetectionReportRepository.storeDetectionReport(videoId, jsonReport);
-
-            console.log(`✅ Successfully stored processed video & report for video ID: ${videoId}`);
-
-            // Notify frontend via WebSocket
-            sendWebSocketNotification(videoId, "Processing Complete! Video and report are ready.");
-
-            // Acknowledge message processing
-            channel.ack(msg);
-          } catch (error) {
-            console.error("❌ Error processing message:", error);
-            channel.nack(msg, false, false); // Reject message (avoid infinite loops)
+          if (!videoId || !processedVideoBuffer || !jsonReport) {
+            console.warn(`[QUEUE][RECEIVE] ⚠️ Пропущено: не хватает полей (videoId=${videoId})`);
+            return channel.nack(msg, false, false); // отклонить без повторной попытки
           }
+
+          console.log(`[QUEUE][RECEIVE] 📩 Получено сообщение: videoId=${videoId}`);
+
+          // Сохраняем обработанное видео
+          await ProcessedVideoRepository.storeProcessedVideo(videoId, processedVideoBuffer);
+          console.log(`[DB] ✅ Обработанное видео сохранено: ${videoId}`);
+
+          // Сохраняем JSON-отчёт
+          await DetectionReportRepository.storeDetectionReport(videoId, jsonReport);
+          console.log(`[DB] ✅ Отчёт сохранён: ${videoId}`);
+
+          // Уведомляем фронт
+          sendWebSocketNotification(videoId, "completed");
+
+          // Подтверждаем сообщение
+          channel.ack(msg);
+          console.log(`[QUEUE][ACK] ✅ Сообщение подтверждено: ${videoId}`);
+        } catch (error) {
+          console.error("[QUEUE][ERROR] ❌ Ошибка обработки сообщения:", error.message);
+          channel.nack(msg, false, false); // отклонить без повторной попытки
         }
       },
-      { noAck: false } // Ensure message is only removed after successful processing
+      { noAck: false } // сообщение удаляется только после ack
     );
   } catch (error) {
-    console.error("❌ RabbitMQ Consumer Error:", error);
+    console.error("[QUEUE][START] ❌ Ошибка запуска consumer:", error.message);
   }
 };
 
-// ✅ Ensure proper export
 module.exports = { processVideoResults };

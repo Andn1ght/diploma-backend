@@ -1,79 +1,74 @@
-const pool = require("../config/db");
+const pool = require("../config/db"); // Подключение к PostgreSQL через пул
 
-// Function to create tables if they don't exist
+// Функция инициализации структуры базы данных
 const initializeDatabase = async () => {
   try {
-    console.log("🔄 Initializing database...");
+    console.log("🔄 Инициализация структуры базы данных...");
 
     await pool.query(`
+      -- Включаем расширение для генерации UUID
       CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-      -- Users Table (RBAC Enabled)
+      -- Таблица пользователей с поддержкой ролей (RBAC)
       CREATE TABLE IF NOT EXISTS users (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          username TEXT UNIQUE NOT NULL,
-          email TEXT UNIQUE NOT NULL,
-          password_hash TEXT NOT NULL,
-          role TEXT CHECK (role IN ('admin', 'user', 'investigator')) NOT NULL DEFAULT 'user',
-          created_at TIMESTAMP DEFAULT NOW()
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        username TEXT UNIQUE NOT NULL,
+        email TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT CHECK (role IN ('admin', 'user', 'investigator')) NOT NULL DEFAULT 'user',
+        created_at TIMESTAMP DEFAULT NOW()
       );
 
-      -- Uploaded Videos Table (Stores Raw Videos)
+      -- Таблица загруженных видео (сырые видеофайлы)
       CREATE TABLE IF NOT EXISTS uploaded_videos (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-          original_filename TEXT NOT NULL,
-          raw_video BYTEA NOT NULL,
-          storage_path TEXT NOT NULL, 
-          uploaded_at TIMESTAMP DEFAULT NOW()
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+        original_filename TEXT NOT NULL,
+        title TEXT DEFAULT 'Untitled',
+        description TEXT DEFAULT '',
+        raw_video BYTEA NOT NULL,
+        storage_path TEXT NOT NULL,
+        is_deleted BOOLEAN DEFAULT FALSE,
+        is_favorite BOOLEAN DEFAULT FALSE,
+        uploaded_at TIMESTAMP DEFAULT NOW()
       );
 
-      -- Video Metadata Table (Stores Video Properties)
-      CREATE TABLE IF NOT EXISTS video_metadata (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          video_id UUID REFERENCES uploaded_videos(id) ON DELETE CASCADE,
-          format TEXT CHECK (format IN ('mp4', 'avi', 'mkv')) NOT NULL,
-          resolution TEXT NOT NULL,
-          duration INTERVAL NOT NULL,
-          frame_rate INT NOT NULL CHECK (frame_rate > 0)
-      );
-
-      -- Processed Videos Table (Stores Processed Videos with Labels)
+      -- Таблица обработанных видео от ML-сервиса
       CREATE TABLE IF NOT EXISTS processed_videos (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          video_id UUID REFERENCES uploaded_videos(id) ON DELETE CASCADE,
-          processed_video BYTEA NOT NULL,
-          processed_at TIMESTAMP DEFAULT NOW()
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        video_id UUID UNIQUE REFERENCES uploaded_videos(id) ON DELETE CASCADE,
+        processed_video BYTEA NOT NULL,
+        processed_at TIMESTAMP DEFAULT NOW()
       );
 
-      -- Detection Results Table (Stores JSON Reports)
+      -- Таблица с результатами детекции (JSON отчёт)
       CREATE TABLE IF NOT EXISTS detection_results (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          video_id UUID REFERENCES uploaded_videos(id) ON DELETE CASCADE,
-          detection_json JSONB NOT NULL,
-          detection_accuracy FLOAT CHECK (detection_accuracy BETWEEN 0 AND 1),
-          reviewed BOOLEAN DEFAULT FALSE,
-          reviewer_id UUID REFERENCES users(id) ON DELETE SET NULL,
-          reviewed_at TIMESTAMP
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        video_id UUID UNIQUE REFERENCES uploaded_videos(id) ON DELETE CASCADE,
+        detection_json JSONB NOT NULL,
+        detection_accuracy FLOAT CHECK (detection_accuracy BETWEEN 0 AND 1),
+        reviewed BOOLEAN DEFAULT FALSE,
+        reviewer_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        reviewed_at TIMESTAMP
       );
 
-      -- Logs Table (Tracks System Events)
+      -- Таблица логов (для будущей аналитики и аудита)
       CREATE TABLE IF NOT EXISTS logs (
-          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-          user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-          action TEXT NOT NULL,
-          description TEXT,
-          created_at TIMESTAMP DEFAULT NOW()
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+        action TEXT NOT NULL,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
       );
     `);
 
-    console.log("✅ Database schema initialized successfully!");
+    console.log("✅ Структура базы данных успешно инициализирована!");
   } catch (error) {
-    console.error("❌ Database initialization failed:", error.message);
+    console.error("❌ Ошибка инициализации базы:", error.message);
   } finally {
-    pool.end();
+    pool.end(); // Закрываем пул соединений
   }
 };
 
-// Run initialization
+// Запуск инициализации
 initializeDatabase();
