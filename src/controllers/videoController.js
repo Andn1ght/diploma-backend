@@ -1,5 +1,5 @@
 const ProcessedVideoRepository = require("../repositories/processedVideoRepository");
-const VideoRepository = require("../repositories/VideoRepository")
+const VideoRepository = require("../repositories/videoRepository")
 const sendVideoForProcessing = require("../queue/videoProducer");
 const multer = require("multer");
 
